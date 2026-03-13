@@ -1,10 +1,13 @@
 # storytelling1
+
+```
 ██████╗  █████╗ ██████╗  █████╗ ██████╗  ██████╗ ██╗  ██╗
 ██╔══██╗██╔══██╗██╔══██╗██╔══██╗██╔══██╗██╔═══██╗╚██╗██╔╝
 ██████╔╝███████║██████╔╝███████║██║  ██║██║   ██║ ╚███╔╝ 
 ██╔═══╝ ██╔══██║██╔══██╗██╔══██║██║  ██║██║   ██║ ██╔██╗ 
 ██║     ██║  ██║██║  ██║██║  ██║██████╔╝╚██████╔╝██╔╝ ██╗
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝  ╚═════╝ ╚═╝  ╚═╝
+```
 
 Você acorda.
 
@@ -27,17 +30,6 @@ você acorda novamente.
 ┌─ MECÂNICAS DO JOGO ─────────────────────────────┐
 
 - RPG de texto rodando no terminal
-- sistema de loop temporal
-- múltiplas escolhas
-- contador de mortes
-- pistas persistentes entre loops
-- perseguição com tempo limite de 15 segundos
-
-┌─ O LOOP TEMPORAL ───────────────────────────────┐
-
-Cada vez que a personagem morre, o tempo reinicia.
-Mas algumas coisas permanecem:
-
-- pistas
-- memórias
-- fragmentos de eventos anteriores
+- múltiplas escolhas e contador de mortes
+- perseguições em pouco tempo
+- pistas, itens e memórias adquiridos conforme jogo passa

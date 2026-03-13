@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+from arts import *
 
 
 def clear_screen():
@@ -31,16 +32,7 @@ def title(text):
 
 
 def show_logo():
-    clear_screen()
-    print(r"""
-██████╗  █████╗ ██████╗  █████╗ ██████╗  ██████╗ ██╗  ██╗
-██╔══██╗██╔══██╗██╔══██╗██╔══██╗██╔══██╗██╔═══██╗╚██╗██╔╝
-██████╔╝███████║██████╔╝███████║██║  ██║██║   ██║ ╚███╔╝
-██╔═══╝ ██╔══██║██╔══██╗██╔══██║██║  ██║██║   ██║ ██╔██╗
-██║     ██║  ██║██║  ██║██║  ██║██████╔╝╚██████╔╝██╔╝ ██╗
-╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝  ╚═════╝ ╚═╝  ╚═╝
-""")
-    print(" " * 26 + "LOOP EXPERIMENT\n")
+    art_logo()
     time.sleep(1.5)
 
 
@@ -54,12 +46,11 @@ def choose(valid_options):
 
 def show_instructions():
     title("INSTRUÇÕES")
-    narrate("PARADOX é um RPG de texto com terror psicológico e loop temporal.")
+    narrate("PARADOX é um RPG de texto com terror psicológico.")
     narrate("Você vai explorar a floresta, encontrar pistas e morrer algumas vezes.")
-    narrate("Sim, morrer faz parte do progresso. Um conceito adorável.")
-    narrate("Sempre que a criatura aparecer, você terá 15 segundos para se esconder.")
-    narrate("Algumas escolhas erradas levam à morte imediata.")
-    narrate("As pistas e memórias encontradas ajudam a quebrar o ciclo.")
+    narrate("E sim morrer faz parte do progresso.")
+    narrate("É um jogo de múltipa escolha, porém algumas escolhas erradas levam à morte imediata.")
+    narrate("As pistas, itens e memórias encontradas ajudam a quebrar o ciclo.")
     pause()
 
 

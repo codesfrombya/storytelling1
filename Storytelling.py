@@ -5,15 +5,10 @@ from story import intro
 from events import run_loop, DeathInLoop, GameFinished
 
 
-def ask_player_name():
-    print()
-    name = input("Digite o nome da personagem: ").strip()
-    return name if name else "Larissa"
-
-
 def show_summary(player, loop_state, ending_name):
     print("\nFIM DE JOGO")
     print(f"Final alcançado: {ending_name}")
+    print(f"Personagem: {player['nome']}")
     print(f"Loops vividos: {loop_state['loop']}")
     print(f"Mortes totais: {player['mortes']}")
     print(f"Pistas descobertas: {len(player['pistas'])}")
@@ -22,7 +17,7 @@ def show_summary(player, loop_state, ending_name):
 
 def play_game():
     while True:
-        player = create_player(ask_player_name())
+        player = create_player()
         loop_state = create_loop_state()
 
         intro(player)
@@ -42,7 +37,7 @@ def play_game():
                     return
                 if choice == "3":
                     title("ENCERRANDO")
-                    narrate("Até a próxima. Ou até o próximo loop.")
+                    narrate("Até a próxima!")
                     raise SystemExit
 
 

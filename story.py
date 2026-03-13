@@ -1,6 +1,7 @@
 import time
 from menu import title, narrate, pause
 
+
 def intro(player):
     title("PARADOX")
     narrate("Carregando...", delay=0.02)
@@ -11,7 +12,7 @@ def intro(player):
     narrate("Sua cabeça dói.")
     narrate("A última coisa de que lembra é de um clarão e barulhos altos.")
     narrate("De repente, você percebe que está completamente sozinha.")
-    narrate("Algo mais havia acontecido, mas você não se lembra de nada.")
-    narrate(f"Quem é você, {player['nome']}? Como veio parar aqui?")
-    narrate("E quem bateu na sua cabeça?")
+    narrate("Você não sabe seu nome.")
+    narrate("Nem sabe por que está naquele lugar.")
+    narrate("E alguma coisa, escondida entre as árvores, parece já saber quem você é.")
     pause()

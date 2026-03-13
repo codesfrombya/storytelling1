@@ -1,6 +1,7 @@
 import os
 import time
 import threading
+from arts import *
 
 try:
     import msvcrt
@@ -8,7 +9,7 @@ except ImportError:
     msvcrt = None
 
 from menu import title, narrate, pause
-from player import add_item, add_memory, add_clue
+from player import add_item, add_memory, add_clue, get_player_name
 from loop import register_death
 
 
@@ -44,13 +45,18 @@ def timed_input_windows(valid_options, timeout=15):
     last_second = None
 
     while True:
-        remaining = timeout - int(time.time() - start_time)
+        elapsed = time.time() - start_time
+        remaining = max(0, timeout - int(elapsed))
 
         if remaining != last_second:
-            print(f"\rTempo para se esconder: {remaining:2d} segundos | Escolha: ", end="", flush=True)
+            print(
+                f"\rTempo para se esconder: {remaining:2d} segundos | Escolha: ",
+                end="",
+                flush=True,
+            )
             last_second = remaining
 
-        if remaining <= 0:
+        if elapsed >= timeout:
             print("\rTempo esgotado!                                         ")
             return None
 
@@ -77,6 +83,7 @@ def timed_input_fallback(prompt, timeout=15):
 
     for remaining in range(timeout, 0, -1):
         if result[0] is not None:
+            print()
             return result[0]
         print(f"\rTempo para se esconder: {remaining:2d} segundos ", end="", flush=True)
         time.sleep(1)
@@ -88,11 +95,16 @@ def timed_input_fallback(prompt, timeout=15):
 def timed_choice(valid_options, timeout=15):
     if os.name == "nt" and msvcrt is not None:
         return timed_input_windows(valid_options, timeout)
-    return timed_input_fallback("\nEscolha rapidamente: ", timeout)
+
+    choice = timed_input_fallback("\nEscolha rapidamente: ", timeout)
+    if choice in valid_options:
+        return choice
+    return choice
 
 
 def die(player, loop_state, reason, clue_after_death=None):
     title("VOCÊ MORREU")
+    art_morte()
     narrate(reason)
 
     if clue_after_death:
@@ -110,8 +122,12 @@ def die(player, loop_state, reason, clue_after_death=None):
     raise DeathInLoop()
 
 
-def creature_hide_event(player, loop_state):
+def creature_hide_event(player, loop_state, intro_lines=None):
     title("A CRIATURA SE APROXIMA")
+    art_entidade()
+    if intro_lines:
+        for line in intro_lines:
+            narrate(line)
     narrate("Você ouve passos rápidos entre as árvores.")
     narrate("Algo corre na sua direção.")
     narrate("A criatura está perto.")
@@ -129,7 +145,7 @@ def creature_hide_event(player, loop_state):
             player,
             loop_state,
             "Você hesita por tempo demais. A criatura te encontra antes que consiga reagir.",
-            "hesitar_diante_da_criatura_e_morte"
+            "hesitar_diante_da_criatura_e_morte",
         )
 
     if choice == "1":
@@ -143,7 +159,7 @@ def creature_hide_event(player, loop_state):
             player,
             loop_state,
             "A porta da cabana range alto demais. A criatura ouve o som e te alcança.",
-            "a_cabana_nao_e_bom_esconderijo_em_panico"
+            "a_cabana_nao_e_bom_esconderijo_em_panico",
         )
 
     if choice == "3":
@@ -156,7 +172,7 @@ def creature_hide_event(player, loop_state):
             player,
             loop_state,
             "Você tenta se esconder no mato, mas a criatura parece já saber onde procurar.",
-            "o_mato_so_funciona_depois_de_aprender_o_padrao"
+            "o_mato_so_funciona_depois_de_aprender_o_padrao",
         )
 
     if choice == "4":
@@ -170,20 +186,61 @@ def creature_hide_event(player, loop_state):
             player,
             loop_state,
             "Ficar parada parecia uma boa ideia. Não era.",
-            "ficar_parada_sem_entender_a_entidade_falha"
+            "ficar_parada_sem_entender_a_entidade_falha",
         )
 
     die(
         player,
         loop_state,
         "Na pressa, você escolhe mal e perde segundos preciosos.",
-        "o_panico_tambem_mata"
+        "o_panico_tambem_mata",
     )
+
+
+def surprise_creature_event(player, loop_state, event_id, intro_lines, on_survive=None):
+    if event_id in player["pistas"]:
+        if on_survive:
+            on_survive()
+        return
+
+    add_clue(player, event_id)
+    survived = creature_hide_event(player, loop_state, intro_lines=intro_lines)
+    if survived and on_survive:
+        on_survive()
+
+
+def has_secret_route(player):
+    required_clues = {
+        "fenda_aberta",
+        "a_entidade_e_voce",
+        "governo_e_cientistas",
+        "morrer_revela",
+    }
+    return required_clues.issubset(set(player["pistas"])) and len(player["memorias"]) >= 3
+
+
+def reveal_name_if_needed(player):
+    if player.get("nome"):
+        return False
+
+    title("MEMÓRIA RECUPERADA")
+    narrate("Você vira a fotografia com as mãos trêmulas.")
+    narrate("No verso, escrito com tinta quase apagada, há uma identificação.")
+    narrate("'Lívia Moreira - participante 08-17-LA'")
+    narrate("Algo dentro de você se encaixa.")
+    narrate("Como uma peça esquecida voltando ao lugar.")
+    narrate("Lívia Moreira. Esse é o seu nome.")
+
+    player["nome"] = "Lívia Moreira"
+    add_memory(player, "Seu nome é Lívia Moreira.")
+    pause()
+    return True
 
 
 def start_loop_scene(player, loop_state):
     title(f"PARADOX - LOOP {loop_state['loop']}")
-    narrate(f"{player['nome']}, você desperta no mesmo chão frio de sempre.")
+    art_floresta()
+    narrate(f"{get_player_name(player)} desperta no mesmo chão frio de sempre.")
     narrate("Há árvores tortas, lama e uma sensação insuportável de déjà vu.")
 
     if loop_state["loop"] > 1:
@@ -197,8 +254,14 @@ def start_loop_scene(player, loop_state):
     print("2. Gritar por ajuda")
     print("3. Seguir pela trilha da esquerda")
     print("4. Seguir pela trilha da direita")
+    if loop_state["loop"] >= 2:
+        print("5. Seguir o zumbido metálico ao longe")
 
-    choice = choose(["1", "2", "3", "4"])
+    valid_choices = ["1", "2", "3", "4"]
+    if loop_state["loop"] >= 2:
+        valid_choices.append("5")
+
+    choice = choose(valid_choices)
 
     if choice == "1":
         examine_body_scene(player, loop_state)
@@ -206,8 +269,27 @@ def start_loop_scene(player, loop_state):
         scream_scene(player, loop_state)
     elif choice == "3":
         lake_scene(player, loop_state)
-    else:
+    elif choice == "4":
         cemetery_scene(player, loop_state)
+    else:
+        direct_lab_hint_scene(player, loop_state)
+
+
+def direct_lab_hint_scene(player, loop_state):
+    title("ZUMBIDO METÁLICO")
+    narrate("Você segue um ruído baixo, quase industrial, vindo de trás das árvores.")
+    narrate("Não parece natural. Parece escondido.")
+    add_clue(player, "zumbido_do_laboratorio")
+    surprise_creature_event(
+        player,
+        loop_state,
+        "surpresa_zumbido",
+        [
+            "O som para de repente.",
+            "No silêncio que sobra, alguma coisa dispara na sua direção.",
+        ],
+        on_survive=lambda: cabin_scene(player, loop_state),
+    )
 
 
 def examine_body_scene(player, loop_state):
@@ -223,12 +305,26 @@ def examine_body_scene(player, loop_state):
 
     print("\n1. Ir para a trilha da esquerda")
     print("2. Ir para a trilha da direita")
+    print("3. Examinar o sangue seco na roupa")
 
-    choice = choose(["1", "2"])
+    choice = choose(["1", "2", "3"])
     if choice == "1":
         lake_scene(player, loop_state)
-    else:
+    elif choice == "2":
         cemetery_scene(player, loop_state)
+    else:
+        narrate("Você encontra respingos escuros na manga do casaco.")
+        narrate("Não parecem recentes. Parecem repetidos.")
+        add_memory(player, "Em outros loops, você também acordou ferida do mesmo jeito.")
+        surprise_creature_event(
+            player,
+            loop_state,
+            "surpresa_corpo",
+            [
+                "Ao perceber isso, seu peito aperta.",
+                "Um galho quebra logo atrás de você.",
+            ],
+        )
 
 
 def scream_scene(player, loop_state):
@@ -248,24 +344,37 @@ def scream_scene(player, loop_state):
 def lake_scene(player, loop_state):
     while True:
         title("LAGO ESCURO")
+        art_lago()
         narrate("Você chega a um lago imóvel, liso como vidro.")
         narrate("Perto da margem há uma mochila rasgada.")
 
         print("\n1. Abrir a mochila")
         print("2. Olhar seu reflexo")
         print("3. Beber a água")
-        print("4. Voltar")
+        print("4. Examinar as pegadas na margem")
+        print("5. Voltar")
 
-        choice = choose(["1", "2", "3", "4"])
+        choice = choose(["1", "2", "3", "4", "5"])
 
         if choice == "1":
             if "cracha_quebrado" not in player["itens"]:
                 narrate("Dentro da mochila há um crachá quebrado com parte de um nome:")
-                narrate("'...issa A.' e as letras 'N.T.E. - Núcleo Temporal Experimental'")
+                narrate("'...ívia M.' e as letras 'N.T.E. - Núcleo Temporal Experimental'")
                 add_item(player, "cracha_quebrado")
                 add_clue(player, "laboratorio_temporal")
             else:
                 narrate("A mochila já está vazia.")
+
+            surprise_creature_event(
+                player,
+                loop_state,
+                "surpresa_lago_mochila",
+                [
+                    "Quando você fecha a mochila, o silêncio do lago muda.",
+                    "Um estalo seco ecoa atrás de você.",
+                    "A sensação de estar sendo observada volta de uma vez.",
+                ],
+            )
             pause()
 
         elif choice == "2":
@@ -282,8 +391,22 @@ def lake_scene(player, loop_state):
                 player,
                 loop_state,
                 "A água desce queimando pela sua garganta. Seu corpo trava em segundos.",
-                "nao_beber_agua"
+                "nao_beber_agua",
             )
+        elif choice == "4":
+            narrate("Há marcas de pés descalços e arrastados perto da água.")
+            narrate("As pegadas começam na margem... e terminam no nada.")
+            add_clue(player, "pegadas_interrompidas")
+            surprise_creature_event(
+                player,
+                loop_state,
+                "surpresa_lago_pegadas",
+                [
+                    "Você se abaixa para olhar melhor.",
+                    "No reflexo da água, algo se move antes de você ouvir os passos.",
+                ],
+            )
+            pause()
         else:
             return start_loop_scene(player, loop_state)
 
@@ -291,6 +414,7 @@ def lake_scene(player, loop_state):
 def cemetery_scene(player, loop_state):
     while True:
         title("CEMITÉRIO")
+        art_cemiterio()
         narrate("Você encontra lápides sem nomes. Só números.")
         narrate("Algumas parecem recentes. Outras, quebradas.")
 
@@ -298,13 +422,24 @@ def cemetery_scene(player, loop_state):
         print("2. Cavar perto de uma cruz caída")
         print("3. Fugir ao ouvir passos")
         print("4. Ler os números com atenção")
+        print("5. Tocar a lápide mais recente")
 
-        choice = choose(["1", "2", "3", "4"])
+        choice = choose(["1", "2", "3", "4", "5"])
 
         if choice == "1":
             narrate("Atrás de uma lápide há uma placa metálica enterrada.")
             narrate("Nela está escrito: 'Pacientes Reabilitáveis - Série 08'")
             add_clue(player, "voce_era_cobaia")
+            surprise_creature_event(
+                player,
+                loop_state,
+                "surpresa_cemiterio_lapides",
+                [
+                    "O vento para de repente.",
+                    "As árvores ao redor parecem se inclinar na sua direção.",
+                    "Logo depois, alguma coisa corre entre as lápides.",
+                ],
+            )
             pause()
 
         elif choice == "2":
@@ -319,10 +454,34 @@ def cemetery_scene(player, loop_state):
             chase_scene(player, loop_state)
             return
 
-        else:
+        elif choice == "4":
             narrate("Um dos números chama sua atenção: 08-17-LA.")
             narrate("Esse código faz sua cabeça doer.")
             add_memory(player, "Você assinou algum documento com esse código.")
+            surprise_creature_event(
+                player,
+                loop_state,
+                "surpresa_cemiterio_codigo",
+                [
+                    "Sua visão falha por um instante.",
+                    "Quando você ergue a cabeça, sente passos se aproximando em alta velocidade.",
+                ],
+            )
+            pause()
+        else:
+            narrate("A pedra está gelada demais.")
+            narrate("Sob seus dedos, alguém riscou uma única palavra: LÍVIA.")
+            narrate("O nome ecoa dentro da sua cabeça, familiar e distante ao mesmo tempo.")
+            add_memory(player, "Em algum loop, alguém marcou o nome Lívia em uma lápide.")
+            surprise_creature_event(
+                player,
+                loop_state,
+                "surpresa_cemiterio_nome",
+                [
+                    "No mesmo instante, algo atravessa o cemitério correndo.",
+                    "Desta vez, parece saber exatamente onde você está.",
+                ],
+            )
             pause()
 
 
@@ -343,6 +502,7 @@ def chase_scene(player, loop_state):
 def cabin_scene(player, loop_state):
     while True:
         title("CABANA ABANDONADA")
+        art_cabana()
         narrate("Uma cabana apodrecida surge entre as árvores.")
         narrate("Na madeira da parede, alguém riscou palavras com as unhas.")
 
@@ -351,8 +511,9 @@ def cabin_scene(player, loop_state):
             print("2. Usar a chave enferrujada")
         print("3. Entrar pela janela")
         print("4. Observar a parede antes de entrar")
+        print("5. Chamar por alguém dentro da cabana")
 
-        valid = ["1", "3", "4"]
+        valid = ["1", "3", "4", "5"]
         if "chave_enferrujada" in player["itens"]:
             valid.append("2")
 
@@ -363,7 +524,7 @@ def cabin_scene(player, loop_state):
                 player,
                 loop_state,
                 "Você faz barulho demais. A entidade te alcança antes que a porta ceda.",
-                "a_porta_nao_deve_ser_forcada"
+                "a_porta_nao_deve_ser_forcada",
             )
 
         elif choice == "2":
@@ -382,10 +543,32 @@ def cabin_scene(player, loop_state):
             inside_cabin_scene(player, loop_state)
             return
 
-        else:
+        elif choice == "4":
             narrate("Na parede está escrito:")
             narrate("'NÃO CORRA DELA. ELA É VOCÊ.'")
             add_clue(player, "mensagem_da_parede")
+            surprise_creature_event(
+                player,
+                loop_state,
+                "surpresa_cabana_parede",
+                [
+                    "Antes que você consiga se afastar da parede, a madeira estala atrás de você.",
+                    "Alguma coisa acabou de chegar à cabana.",
+                ],
+            )
+            pause()
+        else:
+            narrate("Você chama, mas ninguém responde.")
+            narrate("Depois de alguns segundos, uma voz igual à sua sussurra do outro lado da porta:")
+            narrate("'Tarde demais.'")
+            surprise_creature_event(
+                player,
+                loop_state,
+                "surpresa_cabana_voz",
+                [
+                    "A resposta vem acompanhada de passos violentos do lado de fora.",
+                ],
+            )
             pause()
 
 
@@ -399,8 +582,9 @@ def inside_cabin_scene(player, loop_state):
         print("2. Ligar o rádio")
         print("3. Abrir o alçapão")
         print("4. Procurar objetos pessoais")
+        print("5. Examinar a fotografia com cuidado")
 
-        choice = choose(["1", "2", "3", "4"])
+        choice = choose(["1", "2", "3", "4", "5"])
 
         if choice == "1":
             narrate("As frases se repetem por toda a madeira:")
@@ -415,23 +599,51 @@ def inside_cabin_scene(player, loop_state):
             narrate("'Paciente 08-17-LA apresentou resistência ao ciclo de reabilitação.'")
             narrate("'Persistência identitária acima do esperado.'")
             add_clue(player, "paciente_08_17_la")
+            surprise_creature_event(
+                player,
+                loop_state,
+                "surpresa_radio",
+                [
+                    "No meio do chiado, um ruído de passos invade a cabana.",
+                    "A presença do lado de fora já está perto demais.",
+                ],
+            )
             pause()
 
         elif choice == "3":
             laboratory_scene(player, loop_state)
             return
 
-        else:
+        elif choice == "4":
             narrate("Na fotografia, você aparece sentada na calçada.")
             narrate("Duas pessoas de roupa social estão de pé à sua frente.")
             narrate("No verso, escrito à mão: 'Uma oportunidade de mudar de vida.'")
             add_memory(player, "Você aceitou uma proposta estranha quando estava no fundo do poço.")
+
+            if player.get("nome") is None:
+                reveal_name_if_needed(player)
+            else:
+                pause()
+        else:
+            narrate("Ao aproximar a fotografia da luz, você percebe outra figura ao fundo.")
+            narrate("A silhueta tem o seu corpo... mas está mais velha, torta, quebrada.")
+            add_memory(player, "A entidade já aparecia ao fundo antes mesmo do experimento começar.")
+            surprise_creature_event(
+                player,
+                loop_state,
+                "surpresa_fotografia",
+                [
+                    "A janela da cabana vibra.",
+                    "Do lado de fora, passos circulam a casa.",
+                ],
+            )
             pause()
 
 
 def laboratory_scene(player, loop_state):
     while True:
         title("LABORATÓRIO SUBTERRÂNEO")
+        art_laboratorio()
         narrate("O alçapão leva a um corredor frio iluminado por lâmpadas falhas.")
         narrate("Você encontrou o centro do experimento.")
 
@@ -439,14 +651,24 @@ def laboratory_scene(player, loop_state):
         print("2. Abrir uma cela trancada")
         print("3. Assistir a uma gravação")
         print("4. Destruir os equipamentos")
+        print("5. Vasculhar os armários médicos")
 
-        choice = choose(["1", "2", "3", "4"])
+        choice = choose(["1", "2", "3", "4", "5"])
 
         if choice == "1":
             narrate("Nos arquivos do sistema você lê:")
             narrate("'Projeto Érebo - Reabilitação por Recorrência Temporal.'")
             narrate("'Financiamento autorizado por órgão estatal confidencial.'")
             add_clue(player, "governo_e_cientistas")
+            surprise_creature_event(
+                player,
+                loop_state,
+                "surpresa_laboratorio_computador",
+                [
+                    "A tela pisca duas vezes.",
+                    "As luzes do corredor falham e um som de passos ecoa no metal.",
+                ],
+            )
             pause()
 
         elif choice == "2":
@@ -454,7 +676,7 @@ def laboratory_scene(player, loop_state):
                 player,
                 loop_state,
                 "Dentro da cela havia alguém. Ou algo. Quando a porta abre, a criatura salta em você.",
-                "nem_toda_porta_deve_ser_aberta"
+                "nem_toda_porta_deve_ser_aberta",
             )
 
         elif choice == "3":
@@ -466,7 +688,7 @@ def laboratory_scene(player, loop_state):
             revelation_scene(player, loop_state)
             return
 
-        else:
+        elif choice == "4":
             if len(player["pistas"]) >= 6:
                 narrate("Os equipamentos entram em colapso.")
                 narrate("Alarmes soam. Uma fenda se abre no corredor.")
@@ -479,8 +701,22 @@ def laboratory_scene(player, loop_state):
                 player,
                 loop_state,
                 "Você ativa um protocolo de contenção. Gás invade o laboratório.",
-                "destruir_sem_entender_e_erro"
+                "destruir_sem_entender_e_erro",
             )
+        else:
+            narrate("Você encontra seringas quebradas, pulseiras hospitalares e relatórios incompletos.")
+            narrate("Em uma delas, seu nome aparece várias vezes, sempre seguido da palavra: reincidência.")
+            add_memory(player, "Seu tratamento nunca pretendeu te curar. Pretendia te repetir.")
+            surprise_creature_event(
+                player,
+                loop_state,
+                "surpresa_laboratorio_armario",
+                [
+                    "Uma bandeja metálica cai atrás de você.",
+                    "Algo já entrou no corredor.",
+                ],
+            )
+            pause()
 
 
 def revelation_scene(player, loop_state):
@@ -494,8 +730,9 @@ def revelation_scene(player, loop_state):
     print("2. Negar tudo e fugir")
     print("3. Tentar conversar")
     print("4. Atacá-la")
+    print("5. Perguntar quem começou o experimento")
 
-    choice = choose(["1", "2", "3", "4"])
+    choice = choose(["1", "2", "3", "4", "5"])
 
     if choice == "1":
         player["verdade_revelada"] = True
@@ -510,7 +747,7 @@ def revelation_scene(player, loop_state):
             player,
             loop_state,
             "Você foge pelo corredor, mas corre direto para dentro da própria fenda temporal.",
-            "fugir_da_verdade_reinicia"
+            "fugir_da_verdade_reinicia",
         )
 
     if choice == "3":
@@ -524,12 +761,22 @@ def revelation_scene(player, loop_state):
         final_decision_scene(player, loop_state)
         return
 
-    die(
-        player,
-        loop_state,
-        "Você a ataca. Ela não revida. Só segura seu braço e sussurra: 'ainda não.'",
-        "violencia_sem_compreensao_falha"
-    )
+    if choice == "4":
+        die(
+            player,
+            loop_state,
+            "Você a ataca. Ela não revida. Só segura seu braço e sussurra: 'ainda não.'",
+            "violencia_sem_compreensao_falha",
+        )
+
+    narrate("'Quem colocou a gente aqui?', você pergunta.")
+    narrate("A criatura aponta para o núcleo e para as câmeras quebradas do laboratório.")
+    narrate("'Eles começaram', ela sussurra. 'Mas nós mantivemos.'")
+    add_clue(player, "culpa_compartilhada")
+    add_clue(player, "a_entidade_e_voce")
+    player["verdade_revelada"] = True
+    pause()
+    final_decision_scene(player, loop_state)
 
 
 def final_decision_scene(player, loop_state):
@@ -538,61 +785,76 @@ def final_decision_scene(player, loop_state):
     narrate("Você entende que pode encerrar tudo agora.")
     narrate("Mas cada escolha cobra alguma coisa.")
 
-    print("\n1. Desligar o experimento e escapar")
-    print("2. Manter o loop para continuar 'se corrigindo'")
-    print("3. Sacrificar sua versão futura para quebrar o paradoxo")
-    print("4. Fundir-se com sua outra versão")
+    print("\n1. Libertar as outras cobaias e encerrar o núcleo")
+    print("2. Sacrificar sua versão futura e sair sozinha")
+    print("3. Levar os arquivos e expor a verdade")
+    print("4. Permanecer no loop e aceitar o silêncio")
 
-    choice = choose(["1", "2", "3", "4"])
+    valid_choices = ["1", "2", "3", "4"]
+    if has_secret_route(player):
+        print("5. Entrar na fenda e tocar o coração oculto do experimento")
+        valid_choices.append("5")
+
+    choice = choose(valid_choices)
 
     if choice == "1":
-        ending_liberation()
+        ending_true_redemption(player)
     elif choice == "2":
-        ending_reincidence()
+        ending_good_fall(player)
     elif choice == "3":
-        ending_sacrifice()
+        ending_neutral_truth(player)
+    elif choice == "4":
+        ending_bad_silence(player)
     else:
-        ending_fusion()
+        ending_secret_hidden(player)
 
 
-def ending_liberation():
-    title("FINAL: LIBERTAÇÃO")
-    narrate("Você desliga o núcleo.")
-    narrate("As luzes morrem.")
-    narrate("A floresta treme como se estivesse sendo desfeita.")
-    narrate("Quando você abre os olhos, está do lado de fora do laboratório, ao amanhecer.")
-    narrate("Você não lembra de tudo.")
-    narrate("Mas lembra o bastante para nunca mais aceitar ser apagada.")
-    raise GameFinished("Libertação")
+def ending_true_redemption(player):
+    title("FINAL VERDADEIRO (TRUE ENDING) - REDENÇÃO")
+    narrate("Você desliga o núcleo, mas não para em si mesma.")
+    narrate("Usa o pouco tempo restante para abrir as celas, apagar os protocolos e romper o ciclo de todos.")
+    narrate("A entidade segura seu pulso pela última vez. Não para te matar. Para te impedir de desistir.")
+    narrate("Quando a estrutura desaba, a floresta começa a desaparecer junto com o experimento.")
+    narrate("Ao amanhecer, Lívia Moreira deixa o lugar viva, carregando culpa, memória e uma chance real de recomeço.")
+    raise GameFinished("Final Verdadeiro (True Ending) - Redenção")
 
 
-def ending_reincidence():
-    title("FINAL: REINCIDÊNCIA")
-    narrate("Você escolhe continuar.")
-    narrate("Diz a si mesma que ainda merece punição, ainda merece repetir, ainda merece pagar.")
-    narrate("A entidade sorri.")
-    narrate("Então você entende: ela sorriu porque agora é você quem vai correr atrás da próxima versão.")
-    raise GameFinished("Reincidência")
+def ending_good_fall(player):
+    title("FINAL BOM (GOOD ENDING) - QUEDA")
+    narrate("Você destrói a versão futura de si mesma para quebrar a corrente principal do paradoxo.")
+    narrate("O loop entra em colapso e você consegue sair.")
+    narrate("Mas sai sozinha.")
+    narrate("Lá fora, a verdade é incompleta, e as vozes dos que ficaram ecoam como uma queda que nunca termina.")
+    narrate("Você sobrevive. Nem todo mundo consegue o mesmo.")
+    raise GameFinished("Final Bom (Good Ending) - Queda")
 
 
-def ending_sacrifice():
-    title("FINAL: SACRIFÍCIO")
-    narrate("Você abraça sua versão futura enquanto o núcleo colapsa.")
-    narrate("Ela sussurra: 'obrigada por finalmente entender.'")
-    narrate("A fenda se fecha.")
-    narrate("As outras cobaias presas nos registros do sistema são libertadas do ciclo.")
-    narrate("Seu nome desaparece junto com o experimento.")
-    raise GameFinished("Sacrifício")
+def ending_bad_silence(player):
+    title("FINAL RUIM (BAD ENDING) - SILÊNCIO")
+    narrate("Você toca o núcleo e escolhe não lutar mais.")
+    narrate("As luzes do laboratório se apagam uma a uma, até restar apenas o som do próprio coração.")
+    narrate("Depois, nem isso.")
+    narrate("A floresta permanece. O loop continua. E a próxima coisa que desperta no chão frio já não é bem você.")
+    raise GameFinished("Final Ruim (Bad Ending) - Silêncio")
 
 
-def ending_fusion():
-    title("FINAL: FUSÃO")
-    narrate("Você toca a mão da entidade.")
-    narrate("As memórias se juntam.")
-    narrate("As mortes, os medos, as versões, os erros.")
-    narrate("Pela primeira vez, você se torna inteira.")
-    narrate("O loop quebra não porque foi destruído, mas porque não há mais duas de você para sustentá-lo.")
-    raise GameFinished("Fusão")
+def ending_neutral_truth(player):
+    title("FINAL NEUTRO (NEUTRAL ENDING) - VERDADE")
+    narrate("Você arranca os arquivos do sistema e força uma saída antes do colapso total.")
+    narrate("O mundo enfim vê o Projeto Érebo pelo que ele era.")
+    narrate("A verdade vem à tona, mas o loop não some por completo.")
+    narrate("Parte de você continua presa entre as versões, repetindo fragmentos da floresta em algum lugar fora do tempo.")
+    raise GameFinished("Final Neutro (Neutral Ending) - Verdade")
+
+
+def ending_secret_hidden(player):
+    title("FINAL SECRETO (SECRET ENDING) - OCULTO")
+    narrate("Você atravessa a fenda sem recuar.")
+    narrate("Do outro lado do núcleo, o tempo não corre. Ele observa.")
+    narrate("Você percebe que o experimento nunca tentou só corrigir pessoas. Tentou cultivar algo dentro delas.")
+    narrate("Ao tocar o coração oculto da máquina, Lívia deixa de ser paciente, vítima ou perseguidora.")
+    narrate("Você se torna a falha que nenhum protocolo consegue conter.")
+    raise GameFinished("Final Secreto (Secret Ending) - Oculto")
 
 
 def run_loop(player, loop_state):
